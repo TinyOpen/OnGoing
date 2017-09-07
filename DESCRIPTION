@@ -1,0 +1,11 @@
+Package: OnGoing
+Title: Cluster analysis of categorical data with ultra sparse features
+Version: 1.0.0
+Author: Peng Zhang
+Maintainer: Kaixiu Jin <kathy9302fam@gmail.com>
+Description: This package provide a robost clusfication method vertify by the paper.
+Depends:
+    R (>= 3.2.2)
+License: MIT + file LICENSE
+LazyData: true
+RoxygenNote: 6.0.1
