@@ -11,6 +11,6 @@
 #' @examples
 #'#' fbind(iris$Species[c(1, 51, 101)], PlantGrowth$group[c(1, 11, 21)])
 
-mySquare <- function(x){
-  return(x^2)
+mySquare <- function(x) {
+    return(x^2)
 }
