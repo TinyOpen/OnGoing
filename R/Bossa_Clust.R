@@ -11,28 +11,40 @@
 #' @examples
 #'#' fbind(iris$Species[c(1, 51, 101)], PlantGrowth$group[c(1, 11, 21)])
 
-BossaClust <- function(data, alpha = 1, 
-                       p = c(0.9, 0.8, 0.7, 0.5), lin = 0.2,
+BossaClust <- function(data = NULL, data.pre = NULL, alpha = 1, 
+                       p = c(0.9, 0.8, 0.7), lin = 0.2,
                        is.pca = TRUE, pca.sum.prop = 0.95, fix.pca.comp = FALSE, n.comp = 50,
-                       cri = 1, lintype = "ward.D2")
+                       cri = 1, lintype = "ward.D2", perplexity = 30)
 {
   
   require("psych")
   
   # Check input data --------------------------
-  data.pre <- BossaSimi(data, is.pca = is.pca, pca.sum.prop = pca.sum.prop, 
-                        fix.pca.comp = fix.pca.comp, n.comp = n.comp, alpha = alpha)
-  data.simi <- data.pre$bossa.simi
+  try(if(is.null(data.pre) & is.null(data)) stop("No data to process"))
   
-  n <- dim(data)[1]
+  if(is.null(data.pre)){
+    print("Do boosa transformation and calculate the similarity matrix and disimilarity matrix...")
+    data.pre <- BossaSimi(data, is.pca = is.pca, pca.sum.prop = pca.sum.prop, 
+                          fix.pca.comp = fix.pca.comp, n.comp = n.comp, alpha = alpha)
+    n <- dim(data)[1]
+  }
+  
+  data.simi <- data.pre$bossa.simi
+  data.dis <- data.pre$bossa.disimi
+  
+  if(is.null(data)){
+    n <- dim(data.pre$data)[1]
+    data <- data.pre$data
+  } 
   
   # Do overlap cluster with "SC" method -----------------------------
+  print("Do overlap cluster...")
   overlap.pre <- OverlapClust(data.simi, p = p, lin = lin)
   overlap.clu <- overlap.pre$overlap.clu
   clust.center <- overlap.pre$clust.center
   
   # Merge clusters-----------------------------
-  
+  print("Merge some subclusters...")
   sum.clu <- dim(overlap.clu)[2] - 2
   colnames(overlap.clu) <- c("first.clu", "belong.layer", 
                              paste("clust.", 1:sum.clu, sep = ""))
@@ -77,15 +89,20 @@ BossaClust <- function(data, alpha = 1,
   clu.merge <- sapply(tree.min:tree.max, ClustMerge)  
   cell.hc.clust <- sapply(tree.min:tree.max, function(x){
     hc.clust <- hclust(as.dist(data.pre$bossa.disimi), lintype)
-    hc.tree <- cutree(hc.clust, k = 13)
+    hc.tree <- cutree(hc.clust, k = x)
+    hc.tree
   })
+  
+  # Do tsne for visualization--------------------------
+  print("Do tsne....")
+  my.tsne <- Rtsne(data, perplexity = perplexity)
+  tsne.y <- transform(my.tsne$Y, cell = 1:301)
+  print("tsne done.")
+  
+  
   return(list(overlap.clu = clu.merge, non.overlap.clu = cell.hc.clust,
               ori.overlap = overlap.clu, clust.center = clust.center,
               clu.dis = clu.dis, tree.max = tree.max, tree.min = tree.min,
-              cell.simi = data.simi))
-  
-}
-
-plot.interactive <- function(object){
+              cell.simi = data.simi, tsne.y = tsne.y, data.pre = data.pre))
   
 }
