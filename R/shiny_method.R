@@ -6,10 +6,10 @@
 #'
 #' @return Opens a browser window with an interactive \code{shiny} app and visualize
 #' all precomputed clusterings.
-#' 
+#'
 #' @name bossa_interactive
 #'
-#' @importFrom shiny fluidPage pageWithSidebar mainPanel headerPanel pageWithSidebar selectInput shinyApp sliderInput tabPanel tabsetPanel  pageWithSidebar reactive 
+#' @importFrom shiny fluidPage pageWithSidebar mainPanel headerPanel pageWithSidebar selectInput shinyApp sliderInput tabPanel tabsetPanel  pageWithSidebar reactive
 #' @importFrom rbokeh renderRbokeh ly_points figure grid_plot
 #' @export
 #'
@@ -35,15 +35,15 @@ bossa_interactive <- function(object){
         # Sidebar with sliders that demonstrate various available options
         sidebarPanel(
           
-          sliderInput("hc.k", "K in HC (with recommended choice of K:)", 
+          sliderInput("hc.k", "K in HC (with recommended choice of K:)",
                       min = k.min, max = k.max, value = k.min, step = 1),
-          sliderInput("overlap.k", "K in Overlap (with recommended choice of K:)", 
+          sliderInput("overlap.k", "K in Overlap (with recommended choice of K:)",
                       min = k.min, max = k.max, value = k.min, step = 1),
           selectInput("hc.method", "HC.Method:",
-                      list("ward.D" = "ward.D", 
-                           "ward.D2" = "ward.D2", 
-                           "single" = "single", 
-                           "complete" = "complete", 
+                      list("ward.D" = "ward.D",
+                           "ward.D2" = "ward.D2",
+                           "single" = "single",
+                           "complete" = "complete",
                            "average" = "average"))
           
         ),
@@ -79,10 +79,10 @@ bossa_interactive <- function(object){
       
       output$hc.clust <- renderRbokeh({
         
-        figure(title = "visualization with tsne", xlab = "tsne.x", ylab = "tsne.y", 
+        figure(title = "visualization with tsne", xlab = "tsne.x", ylab = "tsne.y",
                legend_location = NULL) %>%
           ly_points(x = X1, y = X2, color = hc.res(),
-                    data = data.tsne, hover = list(cell)) 
+                    data = data.tsne, hover = list(cell))
       })
       
       output$overlap.clust <- renderRbokeh({
@@ -91,9 +91,9 @@ bossa_interactive <- function(object){
         figs <- lapply(idx, function(x) {
           figure(width = 400, height = 400, legend_location = NULL) %>%
             ly_points(x = X1, y = X2, color = value,
-                      data = overlap.melt()[x,], hover = list(cell = paste(":", cell, sep = ""), 
-                                                              overlap.size = paste(":", cell.overlap.size, sep = "")), 
-                      size = cell.overlap.size*6) 
+                      data = overlap.melt()[x,], hover = list(cell = paste(":", cell, sep = ""),
+                                                              overlap.size = paste(":", cell.overlap.size, sep = "")),
+                      size = cell.overlap.size*6)
         })
         
         grid_plot(figs, ncol = 2, same_axes = TRUE, link_data = TRUE)

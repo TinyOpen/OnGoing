@@ -9,15 +9,15 @@ Depends: R (>= 3.3)
 License: GPL-3
 Authors@R: c(person("Peng", "Zhang",
              email = "pengz@zju.edu.cn", 
-             role = "aut"),
+             role = c("aut")),
              person("Kaixiu", "Jin",
              email = "jinkaixiu@zju.edu.cn",
-             role = "cre"))
+             role = c("cre")))
 LazyData: true
 RoxygenNote: 6.0.1
 Imports:
     reshape2,
     rbokeh,
     shiny,
-    psych
-    
+    psych,
+    pheatmap

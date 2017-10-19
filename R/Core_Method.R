@@ -1,126 +1,25 @@
-# Core methods
-
-
-OverlapClust <- function(data.simi = data.simi, p = c(0.9, 0.75, 0.5), 
-                         lin = 0.25) {
-  n <- dim(data.simi)[1]
-  require("psych")
-  overlap.clu <- cbind(first.clu = rep(0, n), belong.layer = rep(0, n))
-  n.clu <- 1
-  clust <- list()
-  
-  simi.tri <- data.simi[lower.tri(data.simi)]
-  core.thresh <- quantile(simi.tri[simi.tri > 0], p)
-  self <- diag(data.simi)
-  clust.center <- data.frame()
-  
-  for (l in 1:length(p)) {
-    thresh <- core.thresh[l]
-    jump0 <- 0
-    
-    # Look for the critical centers ------------------------
-    
-    while (jump0 == 0) {
-      max.var.idx <- which.max(self)[1]
-      candidt <- sort(data.simi[max.var.idx, ], decreasing = T, index.return = T)
-      candidt.idx <- (1:n)[candidt$ix[candidt$x > thresh]]
-      
-      clust[[n.clu]] <- max.var.idx
-      
-      for (i in candidt.idx) {
-        if (i == max.var.idx) 
-          next
-        candidt.simi <- data.simi[i, c(unlist(clust[[n.clu]]), 
-                                       i)]
-        candidt.simi.check <- candidt.simi[1]  # distance between i and the center
-        
-        if (lin < 0 || lin >= 1) 
-          warning("The parameter 'lin' is not appropriate.")
-        
-        candidt.simi.check <- ifelse(lin > 0 & lin < 1, quantile(candidt.simi, 
-                                                                 lin), ifelse(lin == 0, min(candidt.simi), candidt.simi.check))
-        
-        
-        if (candidt.simi.check > thresh) 
-          clust[[n.clu]] <- append(clust[[n.clu]], i)
-      }
-      
-      sum.new.idx <- sum(overlap.clu[unlist(clust[[n.clu]]), 1] == 
-                           0)
-      print(paste(sum.new.idx, " new points are assigned to the current cluster, sum to ", 
-                  length(clust[[n.clu]]), " cells.", sep = ""))
-      
-      if (sum.new.idx > 1 & n.clu <= 50) {
-        
-        self[unlist(clust[[n.clu]])] <- 0
-        
-        clust.new <- ifelse(1:n %in% unlist(clust[[n.clu]]), 1, 
-                            0)
-        overlap.clu <- cbind(overlap.clu, clust.new)
-        
-        change.position.1 <- as.logical(clust.new) & overlap.clu[, 
-                                                                 1] == 0
-        overlap.clu[change.position.1, 1] <- n.clu
-        change.position.2 <- as.logical(clust.new) & overlap.clu[, 
-                                                                 2] == 0
-        overlap.clu[change.position.2, 2] <- l
-        
-        clust.center <- rbind(clust.center, c(l, max.var.idx))
-        n.clu <- n.clu + 1
-        
-      } else {
-        jump0 <- 1
-        clust <- clust[-n.clu]
-        if (n.clu == 1) 
-          n.clu <- 0
-        
-      }
-    }
-    
-    # Consider the non-neighbours of max variance points ------------------
-    
-    if (n.clu == 0) 
-      next
-    sum.layer.0 <- sum(overlap.clu[, 2] == l)
-    
-    candidt.idx.2 <- which(overlap.clu[, 2] != l)
-    candidt.clu <- which(clust.center[, 1] == l)
-    
-    for (i in candidt.idx.2) {
-      clu.simi <- sapply(candidt.clu, FUN = function(j) {
-        candidt.simi <- data.simi[i, unlist(clust[[j]])]
-        candidt.simi.check <- max(candidt.simi)
-        
-        candidt.simi.check <- ifelse(lin > 0 & lin < 1, quantile(candidt.simi, 
-                                                                 lin), ifelse(lin == 0, min(candidt.simi), candidt.simi.check))
-        return(candidt.simi.check)
-      })
-      
-      max.simi <- max(clu.simi)
-      
-      if (max.simi > thresh) {
-        max.clu.idx <- candidt.clu[which.max(clu.simi)]
-        clust[[max.clu.idx]] <- append(clust[[max.clu.idx]], i)
-        if (overlap.clu[i, 1] == 0) 
-          overlap.clu[i, 1] <- max.clu.idx
-        if (overlap.clu[i, 2] == 0) 
-          overlap.clu[i, 2] <- l
-        overlap.clu[i, 2 + max.clu.idx] <- 1
-      }
-    }
-    
-    sum.layer.1 <- sum(overlap.clu[, 2] == l)
-    
-    if (l > 1) 
-      print(paste("After second search, there are", sum.layer.1 - 
-                    sum.layer.0, "new cells are assigned.", sep = " "))
-  }
-  
-  return(list(overlap.clu = overlap.clu, clust.center = clust.center))
-  
-}
-
-BossaSimi <- function(data, is.pca = TRUE, pca.sum.prop = 0.95, fix.pca.comp = FALSE, 
+#' Boosa Similarity
+#'
+#' Calculate the similarity matrix of Bossa scores which are obtained by boosting
+#' on single attribute.
+#'
+#' @param is.pca A logical variable indicating if the Bossa scores should transformed
+#' to principle components and then calculate the similarity matrix. It is recommended
+#' when processing the ultra-dimention data.
+#' @param pca.sum.prop A numeric indicating how many components should be reserved
+#' in order to make this propotion of variance. The default is \code{pca.sum.prop =  0.95}.
+#' @param n.comp The number of components of PCA. The default is \code{n.comp = 50}.
+#' @param fix.pca.comp A numeric variable indicating whether choosing the fixed
+#' number of components or the fixed porpotion of variance and the default is to
+#' choose fixed porpotion.
+#' @param alpha A power scaling for Bossa scores, representing the weight of
+#' variable sigma value.
+#'
+#' @return An object including Bossa scores, original data, disimilarity matrix and
+#' similarity matrix.
+#'
+#' @export
+BossaSimi <- function(data, is.pca = TRUE, pca.sum.prop = 0.95, fix.pca.comp = FALSE,
                       n.comp = 50, alpha = 1) {
   if (!is.data.frame(data)) {
     if (is.matrix(data)) {
@@ -132,10 +31,10 @@ BossaSimi <- function(data, is.pca = TRUE, pca.sum.prop = 0.95, fix.pca.comp = F
   n <- dim(data)[1]
   p <- dim(data)[2]
   
-  if (!all(apply(data, 2, sum) != 0)) 
+  if (!all(apply(data, 2, sum) != 0))
     warning("The input data contains 'All Zero' gene which should be deleted.")
   
-  if (!all(complete.cases(data))) 
+  if (!all(complete.cases(data)))
     warning("The input data contains missing value.")
   data <- na.omit(data)
   
@@ -164,12 +63,12 @@ BossaSimi <- function(data, is.pca = TRUE, pca.sum.prop = 0.95, fix.pca.comp = F
     var.prop.sum <- cumsum(var.prop)
     sum.prop.index <- which(var.prop.sum > pca.sum.prop)[1]
     if (!fix.pca.comp) {
-      print(paste("need", sum.prop.index, "components to get", pca.sum.prop, 
+      print(paste("need", sum.prop.index, "components to get", pca.sum.prop,
                   "% variance"))
       data.pca.x <- data.pca$x[, 1:sum.prop.index]
     } else {
-      if (n.comp > n | n.comp > p) 
-        warning("The proposed number of components is more than the rank of data.", 
+      if (n.comp > n | n.comp > p)
+        warning("The proposed number of components is more than the rank of data.",
                 call. = FALSE)
       data.pca.x <- data.pca$x[, 1:min(n.comp, n, p)]
     }
@@ -181,17 +80,149 @@ BossaSimi <- function(data, is.pca = TRUE, pca.sum.prop = 0.95, fix.pca.comp = F
   min <- min(bossa.simi)
   diff <- max - min
   bossa.disimi <- (max - bossa.simi)/(max - min)
-  return(list(data = data, U.score = U.score, bossa.disimi = bossa.disimi, 
+  return(list(data = data, U.score = U.score, bossa.disimi = bossa.disimi,
               bossa.simi = bossa.simi))
 }
 
-# function to calculate share matrix among clusters-------------
+
+
+#' Overlap Clustering
+#'
+#' Do overlap clustering with Bossa similarity in different levels of \code{p}.
+#'
+#' @param data.simi The similarity matrix of Bossa scores.
+#'
+OverlapClust <- function(data.simi) {
+  n <- dim(data.simi)[1]
+  overlap.clu <- cbind(first.clu = rep(0, n), belong.layer = rep(0, n))
+  n.clu <- 1
+  clust <- list()
+  
+  simi.tri <- data.simi[lower.tri(data.simi)]
+  core.thresh <- quantile(simi.tri[simi.tri > 0], p)
+  self <- diag(data.simi)
+  clust.center <- data.frame()
+  
+  for (l in 1:length(p)) {
+    thresh <- core.thresh[l]
+    jump0 <- 0
+    
+    # Look for the critical centers ------------------------
+    
+    while (jump0 == 0) {
+      max.var.idx <- which.max(self)[1]
+      candidt <- sort(data.simi[max.var.idx, ], decreasing = T, index.return = T)
+      candidt.idx <- (1:n)[candidt$ix[candidt$x > thresh]]
+      
+      clust[[n.clu]] <- max.var.idx
+      
+      for (i in candidt.idx) {
+        if (i == max.var.idx)
+          next
+        candidt.simi <- data.simi[i, c(unlist(clust[[n.clu]]),
+                                       i)]
+        candidt.simi.check <- candidt.simi[1]  # distance between i and the center
+        
+        if (lin < 0 || lin >= 1)
+          warning("The parameter 'lin' is not appropriate.")
+        
+        candidt.simi.check <- ifelse(lin > 0 & lin < 1, quantile(candidt.simi,
+                                                                 lin), ifelse(lin == 0, min(candidt.simi), candidt.simi.check))
+        
+        
+        if (candidt.simi.check > thresh)
+          clust[[n.clu]] <- append(clust[[n.clu]], i)
+      }
+      
+      sum.new.idx <- sum(overlap.clu[unlist(clust[[n.clu]]), 1] ==
+                           0)
+      print(paste(sum.new.idx, " new points are assigned to the current cluster, sum to ",
+                  length(clust[[n.clu]]), " cells.", sep = ""))
+      
+      if (sum.new.idx > 1 & n.clu <= 50) {
+        
+        self[unlist(clust[[n.clu]])] <- 0
+        
+        clust.new <- ifelse(1:n %in% unlist(clust[[n.clu]]), 1,
+                            0)
+        overlap.clu <- cbind(overlap.clu, clust.new)
+        
+        change.position.1 <- as.logical(clust.new) & overlap.clu[,
+                                                                 1] == 0
+        overlap.clu[change.position.1, 1] <- n.clu
+        change.position.2 <- as.logical(clust.new) & overlap.clu[,
+                                                                 2] == 0
+        overlap.clu[change.position.2, 2] <- l
+        
+        clust.center <- rbind(clust.center, c(l, max.var.idx))
+        n.clu <- n.clu + 1
+        
+      } else {
+        jump0 <- 1
+        clust <- clust[-n.clu]
+        if (n.clu == 1)
+          n.clu <- 0
+        
+      }
+    }
+    
+    # Consider the non-neighbours of max variance points ------------------
+    
+    if (n.clu == 0)
+      next
+    sum.layer.0 <- sum(overlap.clu[, 2] == l)
+    
+    candidt.idx.2 <- which(overlap.clu[, 2] != l)
+    candidt.clu <- which(clust.center[, 1] == l)
+    
+    for (i in candidt.idx.2) {
+      clu.simi <- sapply(candidt.clu, FUN = function(j) {
+        candidt.simi <- data.simi[i, unlist(clust[[j]])]
+        candidt.simi.check <- max(candidt.simi)
+        
+        candidt.simi.check <- ifelse(lin > 0 & lin < 1, quantile(candidt.simi,
+                                                                 lin), ifelse(lin == 0, min(candidt.simi), candidt.simi.check))
+        return(candidt.simi.check)
+      })
+      
+      max.simi <- max(clu.simi)
+      
+      if (max.simi > thresh) {
+        max.clu.idx <- candidt.clu[which.max(clu.simi)]
+        clust[[max.clu.idx]] <- append(clust[[max.clu.idx]], i)
+        if (overlap.clu[i, 1] == 0)
+          overlap.clu[i, 1] <- max.clu.idx
+        if (overlap.clu[i, 2] == 0)
+          overlap.clu[i, 2] <- l
+        overlap.clu[i, 2 + max.clu.idx] <- 1
+      }
+    }
+    
+    sum.layer.1 <- sum(overlap.clu[, 2] == l)
+    
+    if (l > 1)
+      print(paste("After second search, there are", sum.layer.1 -
+                    sum.layer.0, "new cells are assigned.", sep = " "))
+  }
+  
+  return(list(overlap.clu = overlap.clu, clust.center = clust.center))
+  
+}
+
+
+
+#' Clust Share
+#'
+#' Calculate the share matrix among overlap clusters.
+#'
+#' @param obs The result of overlap clustering.
+#'
 clush <- function(obs) {
   m <- dim(obs)[2]
   shmat <- matrix(0, m, m)
   for (i in 1:(m - 1)) {
     for (j in i:m) {
-      shmat[i, j] <- shmat[j, i] <- sum(obs[, i] == 1 & obs[, j] == 
+      shmat[i, j] <- shmat[j, i] <- sum(obs[, i] == 1 & obs[, j] ==
                                           1)
     }
   }
@@ -200,10 +231,15 @@ clush <- function(obs) {
 }
 
 
-# function to test latent match coefficient-------------
+
+#' Merge test
+#'
+#' Do a test when try to merge two overlap clusters.
+#'
+#' @param data A data.frame with two columns with dichotomous or polytomous.
+#' @param r A numeric indicating tetrachoric or polychoric correlation coefficient.
+#'
 testlmc <- function(data, r) {
-  # data is a data.frame with two columns with dichotomous or polytomous,
-  # rho is the tetrachoric or polychoric correlation coefficient
   n <- dim(data)[1]
   P <- list()
   for (i in 1:2) {
@@ -229,27 +265,29 @@ testlmc <- function(data, r) {
   Up <- c(q1, Inf)
   q2l <- c(-Inf, q2)
   q2u <- c(q2, Inf)
-  cvs <- 0  # expected value of UiUj^2
-  cv <- 0  # expected value of UiUj
+  cvs <- 0
+  cv <- 0
+  
   for (i in 1:K1) {
-    # j=1
+    
     f1 <- function(x) {
       dnorm(x) * pnorm((q2u[1] - r * x)/sqrt(1 - r^2))
     }
     If1 <- integrate(f1, lower = Low[i], upper = Up[i])$value
     cv <- cv + If1 * e1[i] * e2[1]
     cvs <- cvs + If1 * e1[i]^2 * e2[1]^2
-    # j=K2
+    
     fk2 <- function(x) {
       dnorm(x) * pnorm((r * x - q2l[K2])/sqrt(1 - r^2))
     }
     Ifk2 <- integrate(fk2, lower = Low[i], upper = Up[i])$value
     cv <- cv + Ifk2 * e1[i] * e2[K2]
     cvs <- cvs + Ifk2 * e1[i]^2 * e2[K2]^2
+    
     if (K2 > 2) {
       for (j in 2:(K2 - 1)) {
         f <- function(x) {
-          dnorm(x) * (pnorm((q2u[j] - r * x)/sqrt(1 - r^2)) - pnorm((q2l[j] - 
+          dnorm(x) * (pnorm((q2u[j] - r * x)/sqrt(1 - r^2)) - pnorm((q2l[j] -
                                                                        r * x)/sqrt(1 - r^2)))
         }
         If <- integrate(f, lower = Low[i], upper = Up[i])$value
@@ -258,17 +296,23 @@ testlmc <- function(data, r) {
       }
     }
   }
+  
   vu <- n * (cvs - cv^2)
   sstat <- stat/sqrt(vu)
   pval <- 2 * (1 - pnorm(abs(sstat)))
-  # print(i) return(list(r=r,covU=covU,corU=cor(U21,U22)))
   return(list(stat = sstat, pval = pval))
 }
 
-# function to determine key features of a cluster-----------------
 
+
+#' Key feature
+#'
+#' Determine key features of each overlap clusters.
+#'
+#' @param cdata Overlap clustering result.
+#' @param criter A numeric indicating tetrachoric or polychoric correlation coefficient.
+#'
 keyfeat <- function(cdata, criter) {
-  # cluster data
   n <- dim(cdata)[1]
   m <- dim(cdata)[2]
   cmax <- max(apply(cdata, 2, max))
@@ -315,7 +359,7 @@ keyfeat <- function(cdata, criter) {
     for (ii in 1:flenp) {
       fii <- floor(featindp[ii]/m)
       fij <- featindp[ii] - fii * m
-      kfeatp[ii] <- paste(colnames(cdata)[fij], colnames(cdata)[fii + 
+      kfeatp[ii] <- paste(colnames(cdata)[fij], colnames(cdata)[fii +
                                                                   1], sep = ",")
     }
   }
@@ -334,7 +378,7 @@ keyfeat <- function(cdata, criter) {
     for (ii in 1:flenn) {
       fii <- floor(featindn[ii]/m)
       fij <- featindn[ii] - fii * m
-      kfeatn[ii] <- paste(colnames(cdata)[fij], colnames(cdata)[fii + 
+      kfeatn[ii] <- paste(colnames(cdata)[fij], colnames(cdata)[fii +
                                                                   1], sep = ",")
     }
   }
@@ -346,11 +390,18 @@ keyfeat <- function(cdata, criter) {
   stat <- (maxs - stat)/(maxs - mins)
   scrit0 <- (maxs + crit)/(maxs - mins)
   scrit1 <- (maxs - crit)/(maxs - mins)
-  return(list(kfp = kfeatp, kfn = kfeatn, stat = stat, scrit0 = scrit0, 
+  return(list(kfp = kfeatp, kfn = kfeatn, stat = stat, scrit0 = scrit0,
               scrit1 = scrit1))
 }
 
 
+#' Clusr Merge
+#'
+#' With every recommended k, merge the overlap clusters depending on the distance
+#' between those.
+#'
+#' @param tree.size The label of each overlap clusters.
+#'
 ClustMerge <- function(tree.size) {
   k <- max(tree.size)
   tree.merge.index <- cutree(clu.hc, k = k)
