@@ -1,4 +1,20 @@
-plot.interactive <- function(object){
+#' Opens \code{BOSSA} results in an interactive session in a web browser.
+#'
+#' Runs interactive \code{shiny} session of \code{BOSSA} based on precomputed clusterings.
+#'
+#' @param object a output of \code{BossaClust} function
+#'
+#' @return Opens a browser window with an interactive \code{shiny} app and visualize
+#' all precomputed clusterings.
+#' 
+#' @name bossa_interactive
+#'
+#' @importFrom shiny fluidPage pageWithSidebar mainPanel headerPanel pageWithSidebar selectInput shinyApp sliderInput tabPanel tabsetPanel  pageWithSidebar reactive 
+#' @importFrom rbokeh renderRbokeh ly_points figure grid_plot
+#' @export
+#'
+
+bossa_interactive <- function(object){
   k.max <- object$tree.max
   k.min <- object$tree.min
   
@@ -34,12 +50,10 @@ plot.interactive <- function(object){
         
         # Show a table summarizing the values entered
         mainPanel(
-          #h4("Summary"),
-          #verbatimTextOutput("summary")
+          
           tabsetPanel(
             tabPanel("Hierarchical Clustering", rbokehOutput("hc.clust", width = 500, height = 500)),
             tabPanel("Overlap Clustering", rbokehOutput("overlap.clust", width = 800, height = 3000))
-            #tabPanel("hmh.group", rbokehOutput("group.rbokeh", width = 600, height = 1200))
           )
         )
       )

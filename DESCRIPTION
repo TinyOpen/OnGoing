@@ -1,11 +1,23 @@
-Package: OnGoing
-Title: Cluster analysis of categorical data with ultra sparse features
+Package: BoosaClust
+type: package
+Title: A clustering method by boosting on single attribute
 Version: 1.0.0
 Author: Peng Zhang
 Maintainer: Kaixiu Jin <kathy9302fam@gmail.com>
-Description: This package provide a robost clusfication method vertify by the paper.
-Depends:
-    R (>= 3.2.2)
-License: MIT + file LICENSE
+Description: An overlap clustering algorithm for categorical ultra-dimention data.
+Depends: R (>= 3.3)
+License: GPL-3
+Authors@R: c(person("Peng", "Zhang",
+             email = "pengz@zju.edu.cn", 
+             role = "aut"),
+             person("Kaixiu", "Jin",
+             email = "jinkaixiu@zju.edu.cn",
+             role = "cre"))
 LazyData: true
 RoxygenNote: 6.0.1
+Imports:
+    reshape2,
+    rbokeh,
+    shiny,
+    psych
+    
