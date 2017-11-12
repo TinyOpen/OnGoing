@@ -37,100 +37,131 @@
 #'
 #' @import  Rtsne
 #'
+#' @return An object including overlap clusters after merging and non-overlap 
+#' clusters, which can be showed by function \code{\link{bossa_interactive}}
 #' @export
 
-BossaClust <- function(data = NULL, data.pre = NULL, alpha = 1, p = c(0.9, 0.75, 0.5),
+
+BossaClust <- function(data, data.pre = NULL, alpha = 1, p = c(0.9, 0.75, 0.5),
                        lin = 0.25, is.pca = TRUE, pca.sum.prop = 0.95, n.comp = 50,
-                       fix.pca.comp = FALSE, cri = 1, lintype = c, perplexity = 30)
+                       fix.pca.comp = FALSE, cri = 1, lintype = "ward.D2", perplexity = 30)
 {
   
   # Check input data --------------------------
   try(if (is.null(data.pre) & is.null(data))
     stop("No data to process"))
+
   
   if (is.null(data.pre)) {
-    print("Do boosa transformation and calculate the similarity matrix and disimilarity matrix...")
     data.pre <- BossaSimi(data, is.pca = is.pca, pca.sum.prop = pca.sum.prop,
                           fix.pca.comp = fix.pca.comp, n.comp = n.comp, alpha = alpha)
-    n <- dim(data)[1]
   }
   
   data.simi <- data.pre$bossa.simi
-  data.dis <- data.pre$bossa.disimi
   
-  if (is.null(data)) {
-    n <- dim(data.pre$data)[1]
-    data <- data.pre$data
-  }
+  n <- dim(data.simi)[1]
+  cell.name <- row.names(data.simi)
+  
+  try(if (dim(data.simi)[1] != dim(data)[1])
+    stop("there is conflict between data.pre and data."))
   
   # Do overlap cluster with 'SC' method -----------------------------
-  print("Do overlap cluster...")
-  overlap.pre <- OverlapClust(data.simi, p = p, lin = lin)
+  cat("Do overlap cluster...\n")
+  overlap.pre <- OverlapClust(data.simi)
   overlap.clu <- overlap.pre$overlap.clu
   clust.center <- overlap.pre$clust.center
   
   # Merge clusters-----------------------------
-  print("Merge some subclusters...")
+  cat("\nMerge some subclusters...\n")
   sum.clu <- dim(overlap.clu)[2] - 2
-  colnames(overlap.clu) <- c("first.clu", "belong.layer", paste("clust.",
-                                                                1:sum.clu, sep = ""))
-  ori.clu <- overlap.clu[, -c(1, 2)]
   
-  shmat <- clush(overlap.clu[, -c(1, 2)])
-  sig.lev <- ifelse(cri < 1, cri, ifelse(cri == 1, 0.05/sum.clu, 0.05/sum.clu/(sum.clu -
-                                                                                 1)))
-  
-  
-  if (sum.clu < 2)
-    return(list(clust.center = clust.center, overlap.clu = overlap.clu,
-                shmat = shmat, p = p))
-  
-  clumatch <- keyfeat(ori.clu, sig.lev)
-  scrit0 <- clumatch$scrit0
-  scrit1 <- clumatch$scrit1
-  
-  clu.dis <- as.dist(clumatch$stat)
-  merclu <- clumatch$kfp
-  sepclu <- clumatch$kfn
-  
-  # Take charge of the left cells--------------
-  non.core.ind <- (1:n)[apply(overlap.clu[, -c(1, 2)], 1, sum) == 0]
-  k1 <- dim(clust.center)[1]
-  for (i in non.core.ind) {
-    maxci <- rep(0, k1)
-    ij <- 0
-    for (j in 1:k1) {
-      ij <- ij + 1
-      maxci[ij] <- quantile(data.simi[i, overlap.clu[, 1] == j],
-                            0.5)
-    }
-    max.ind <- which.max(maxci)
+  # Cluster of the left cells--------------
+  overlap.clu <- LeftClust(overlap.clu, sum.clu, data.simi, n = n)
+
+  # Set some output variables
+
+  if (sum.clu < 2){
+    cat("/n there just one subcluster.")
+    clu.merge <- overlap.clu[,-c(1,2)]
+    clu.merge <- data.frame(cell = rownames(data.simi), clust = overlap.clu[,3])
+    clu.merge <- as.list(clu.merge)
     
-    overlap.clu[i, 1] <- max.ind
-    overlap.clu[i, (max.ind + 2)] <- 1
+    tree.max = 1
+    tree.min = 1
+    
+    scrit0 = NULL
+    scrit1 = NULL
+    share.mat = NULL
+    clu.match = NULL
   }
-  
-  clu.hc <- hclust(clu.dis, lintype)
-  tree.max <- max(cutree(clu.hc, h = scrit0))
-  tree.min <- max(cutree(clu.hc, h = scrit1))
-  
-  clu.merge <- sapply(tree.min:tree.max, ClustMerge)
+  if (sum.clu >= 2){
+    share.mat <- ClustShare(overlap.clu[, -c(1,2)]) # calculate the overlap of each clusters
+    clu.match <- KeyFeature(overlap.clu, cri, sum.clu = sum.clu)  # determine key features of each overlap clusters
+    scrit0 <- clu.match$scrit0
+    scrit1 <- clu.match$scrit1
+    mer.clu <- clu.match$mer.clu
+    clu.dis <- as.dist(clu.match$clu.math.stat)
+    
+    clu.hc <- hclust(clu.dis, lintype) # calculate the recommended number of clusters
+    tree.max <- max(cutree(clu.hc, h = scrit0))
+    tree.min <- max(cutree(clu.hc, h = scrit1))
+    
+    # Merge overlap clusters with recommended k 
+    clu.merge <- lapply(tree.min:tree.max, function(x){ # merge the overlap subclusters
+      ClustMerge(x, clu.hc = clu.hc, n = n, overlap.clu = overlap.clu, data.simi = data.simi)}
+    )
+  }
+
+  # Do non-overlap clustering with recommended k and do test find different variables(genes)
   cell.hc.clust <- sapply(tree.min:tree.max, function(x) {
     hc.clust <- hclust(as.dist(data.pre$bossa.disimi), lintype)
-    hc.tree <- cutree(hc.clust, k = x)
-    hc.tree
+    order.clust <- OrderClust(hc.clust, k = x)
+    order.clust
+  }) # it's a data.frame
+  
+
+  # HC: find different variables(genes) and prepare the data for heatmap
+  U.score.non.pca <- data.pre$U.score.non.pca 
+  hc.de.plot.all <- FindHcDe(cell.hc.clust = cell.hc.clust, 
+                         U.score.non.pca = U.score.non.pca, cell.name = cell.name)
+  hc.de.plot <- hc.de.plot.all$hc.de.plot
+  # Overlap: find different variables(genes) and prepare the data for heatmap
+  
+  overlap.de.plot.all <- FindOverlapDe(clu.merge, U.score.non.pca, cell.name = cell.name, n = n)
+  overlap.de.plot <- overlap.de.plot.all$overlap.de.plot
+  clu.merge <- overlap.de.plot.all$clu.merge.1
+  
+  clu.merge.share <- lapply(clu.merge, FUN = function(x){
+    ClustShare(x[,-1])
   })
   
+  # Before Merge: find different variables(genes) and prepare the data for heatmap
+  bef.de.plot.all <- FindBefDe(mer.clu, overlap.clu, U.score.non.pca, cell.name)
+  bef.de.plot <- bef.de.plot.all$bef.de.plot
+  mer.clu <- bef.de.plot.all$mer.clu
+  
   # Do tsne for visualization--------------------------
-  print("Do tsne....")
+  cat("\n\nDo tsne....\n")
   my.tsne <- Rtsne(data, perplexity = perplexity)
-  tsne.y <- transform(my.tsne$Y, cell = 1:301)
-  print("tsne done.")
+  cell = matrix(1:n, n)
+  tsne.y <- cbind(my.tsne$Y, cell) 
+  cat("tsne done.\n")
   
+  K.level <- tree.max - tree.min + 1
   
+  # prepare the data for Overlap tsne visualization 
+  overlap.melt.data <- lapply(1:K.level, function(x){
+    OverlapMelt(K = x, overlap.clu = clu.merge, data.tsne = tsne.y)
+  })
+  
+  overlap.note <- OverlapNote(clu.merge)
+
   return(list(overlap.clu = clu.merge, non.overlap.clu = cell.hc.clust,
-              ori.overlap = overlap.clu, clust.center = clust.center, clu.dis = clu.dis,
-              tree.max = tree.max, tree.min = tree.min, cell.simi = data.simi,
-              tsne.y = tsne.y, data.pre = data.pre))
+              ori.overlap = overlap.clu, clu.dis = clu.dis, clu.share = share.mat,
+              clu.merge.share = clu.merge.share, mer.clu = mer.clu, 
+              tree.max = tree.max, tree.min = tree.min, tsne.y = tsne.y,
+              hc.de.plot = hc.de.plot, overlap.de.plot = overlap.de.plot, bef.de.plot = bef.de.plot,
+              overlap.melt.data = overlap.melt.data, overlap.clu.res = overlap.note))
   
 }
+

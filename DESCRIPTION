@@ -1,12 +1,12 @@
-Package: BoosaClust
+Package: boclust
 type: package
-Title: A clustering method by boosting on single attribute
+Title: A clustering method based on boosting on single attribute
 Version: 1.0.0
 Author: Peng Zhang
 Maintainer: Kaixiu Jin <kathy9302fam@gmail.com>
 Description: An overlap clustering algorithm for categorical ultra-dimention data.
 Depends: R (>= 3.3)
-License: GPL-3
+License: GPL-2
 Authors@R: c(person("Peng", "Zhang",
              email = "pengz@zju.edu.cn", 
              role = c("aut")),
@@ -20,4 +20,4 @@ Imports:
     rbokeh,
     shiny,
     psych,
-    pheatmap
+    Rtsne
